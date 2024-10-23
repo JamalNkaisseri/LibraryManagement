@@ -1,30 +1,24 @@
 package com.lms;
 
-import java.util.Scanner;
+import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
-        Scanner input = new Scanner(System.in);
+        // Call the viewAllBooks method to retrieve the list of books
+        List<Book> books = Book.viewAllBooks();
 
-        // Prompt the user for their username
-        System.out.println("Enter username:");
-        String username = input.nextLine();
-
-        // Prompt the user for their password
-        System.out.println("Enter password:");
-        String password = input.nextLine();
-
-        // Create a User object without username and password as arguments
-        User user = new User(username, password);
-
-        // Attempt to log in using the provided username and password
-        if (user.login(username, password)) {
-            System.out.println("Login successful!");
+        // Display the books
+        if (books.isEmpty()) {
+            System.out.println("No books found in the database.");
         } else {
-            System.out.println("Invalid username or password.");
+            System.out.println("Books in the database:");
+            for (Book book : books) {
+                System.out.println("ID: " + book.getId() +
+                        ", Title: " + book.getTitle() +
+                        ", Author: " + book.getAuthor() +
+                        ", ISBN: " + book.getIsbn() +
+                        ", Category ID: " + book.getCategoryId());
+            }
         }
-
-        // Close the scanner to prevent resource leaks
-        input.close();
     }
 }
