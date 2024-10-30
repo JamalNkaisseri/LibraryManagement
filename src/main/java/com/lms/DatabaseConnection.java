@@ -1,8 +1,6 @@
 package com.lms; // Package declaration for organizing related classes
 
-import java.sql.Connection; // Import for SQL Connection
-import java.sql.DriverManager; // Import for managing database connections
-import java.sql.SQLException; // Import for SQL exceptions
+import java.sql.*;
 
 /**
  * The DatabaseConnection class is responsible for establishing a connection to the MySQL database.
@@ -46,4 +44,27 @@ public class DatabaseConnection {
     public Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); // Create and return a new connection using the provided credentials
     }
+
+    public int getCategoryId(String categoryName) {
+        String sql = "SELECT category_id FROM category WHERE name = ?";
+
+        try (Connection conn = this.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, categoryName);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt("category_id");
+            } else {
+                System.out.println("Category not found.");
+                return -1; // Return -1 if category is not found
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Error fetching category ID: " + e.getMessage());
+            return -1; // Return -1 if there was an error
+        }
+    }
+
 }

@@ -7,6 +7,14 @@ import java.sql.SQLException; // Import for SQL exceptions
 import java.util.ArrayList; // Import for ArrayList
 import java.util.List; // Import for List
 
+/*
+Book Categories
+  1.Fiction
+  2.Non-Fiction
+  3.Science Fiction
+  4.Biography
+ */
+
 /**
  * The Book class represents a book entity and contains methods for
  * interacting with the books table in the database.
