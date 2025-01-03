@@ -34,7 +34,7 @@ public class SearchService {
 
             // Process the result set
             while (rs.next()) {
-                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"));
+                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"), rs.getInt("total_copies"));
                 book.setId(rs.getInt("book_id"));
                 books.add(book);
             }
@@ -66,7 +66,7 @@ public class SearchService {
 
             // Process the result set
             while (rs.next()) {
-                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"));
+                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"),rs.getInt("total_copies"));
                 book.setId(rs.getInt("book_id"));
                 books.add(book);
             }
@@ -98,7 +98,7 @@ public class SearchService {
 
             // Process the result set
             while (rs.next()) {
-                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"));
+                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"),rs.getInt("total_copies"));
                 book.setId(rs.getInt("book_id"));
                 books.add(book);
             }

@@ -1,9 +1,6 @@
 package com.lms; // Package declaration for organizing related classes
 
-import java.sql.Connection; // Import for SQL Connection
-import java.sql.PreparedStatement; // Import for prepared statements
-import java.sql.ResultSet; // Import for SQL result sets
-import java.sql.SQLException; // Import for SQL exceptions
+import java.sql.*;
 import java.util.ArrayList; // Import for ArrayList
 import java.util.List; // Import for List
 
@@ -25,13 +22,15 @@ public class Book {
     private String author; // Author of the book
     private String isbn; // ISBN of the book
     private int categoryId; // Category ID
+    private int totalCopies; //Copies of the book
 
     // Constructor
-    public Book(String title, String author, String isbn, int categoryId) {
+    public Book(String title, String author, String isbn, int categoryId, int totalCopies) {
         this.title = title;
         this.author = author;
         this.isbn = isbn;
         this.categoryId = categoryId; // Initialize categoryId
+        this.totalCopies = totalCopies;
     }
 
     // Getters and Setters
@@ -80,28 +79,60 @@ public class Book {
      *
      * @return true if the book was added successfully, false otherwise.
      */
+
     public boolean addBookToDatabase() {
-        String sql = "INSERT INTO books (title, author, isbn, category_id) VALUES (?, ?, ?, ?)";
+        // SQL query to insert a new book
+        String insertBookSql = "INSERT INTO books (title, author, isbn, category_id, total_copies) VALUES (?, ?, ?, ?, ?)";
+
+        // SQL query to insert copies for the newly added book
+        String insertCopiesSql = "INSERT INTO copies (book_id, barcode, status, `condition`) "
+                + "SELECT ?, CONCAT('BC', ?, '-', numbers.dummy), 'available', 'new' "
+                + "FROM (SELECT 1 AS dummy UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5) AS numbers "
+                + "WHERE numbers.dummy <= ?";
+
         DatabaseConnection dbConnection = new DatabaseConnection(); // Create instance of DatabaseConnection
 
         try (Connection conn = dbConnection.getConnection(); // Get connection using DatabaseConnection
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement bookStmt = conn.prepareStatement(insertBookSql, Statement.RETURN_GENERATED_KEYS)) {
 
-            // Set the values for the prepared statement
-            stmt.setString(1, this.title);
-            stmt.setString(2, this.author);
-            stmt.setString(3, this.isbn);
-            stmt.setInt(4, this.categoryId); // Set the category ID
+            // Set the values for the prepared statement to insert the book
+            bookStmt.setString(1, this.title);
+            bookStmt.setString(2, this.author);
+            bookStmt.setString(3, this.isbn);
+            bookStmt.setInt(4, this.categoryId); // Set the category ID
+            bookStmt.setInt(5, this.totalCopies); // Set total copies for the new book
 
-            // Execute the insertion and return true if successful
-            int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0;
+            // Execute the insertion to add the book
+            int rowsAffected = bookStmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                // Retrieve the generated book ID
+                ResultSet generatedKeys = bookStmt.getGeneratedKeys();
+                if (generatedKeys.next()) {
+                    int bookId = generatedKeys.getInt(1); // Get the book_id of the newly added book
+
+                    // Insert copies for the new book
+                    try (PreparedStatement copiesStmt = conn.prepareStatement(insertCopiesSql)) {
+                        copiesStmt.setInt(1, bookId); // Set book_id for the copies
+                        copiesStmt.setInt(2, bookId); // Use the same book_id to generate the barcode
+                        copiesStmt.setInt(3, this.totalCopies); // Set the number of copies to insert
+
+                        // Execute the insertion of copies
+                        copiesStmt.executeUpdate();
+                    }
+                }
+                return true; // Book and copies successfully added
+            } else {
+                return false; // No rows were affected, meaning the insertion failed
+            }
 
         } catch (SQLException e) {
-            System.out.println("Error adding book to the database: " + e.getMessage());
-            return false;
+            System.out.println("Error adding book and copies to the database: " + e.getMessage());
+            return false; // Return false if there was an error
         }
     }
+
+
 
     /**
      * Updates the book's title and/or author in the database.
@@ -201,7 +232,7 @@ public class Book {
 
             // Process the result set
             while (rs.next()) {
-                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"));
+                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"), rs.getInt("total_copies"));
                 book.setId(rs.getInt("book_id")); // Set the ID for the Book object
                 books.add(book); // Add the Book object to the list
             }

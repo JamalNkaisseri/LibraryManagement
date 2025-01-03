@@ -8,11 +8,9 @@ public class Main {
     public static void main(String[] args) {
         SearchService search = new SearchService();
 
-        search.displayBooksByCategory();
-
-
-
+        addBook();
     }
+
 
     // Method to handle the process of adding a book
     private static void addBook() {
@@ -32,6 +30,9 @@ public class Main {
         System.out.print("Enter book category: ");
         String category = scanner.nextLine();
 
+        System.out.print("Enter the number of copies: ");
+        int totalCopies = scanner.nextInt(); // Ask for the number of copies
+
         // Get the category ID based on the category name
         DatabaseConnection dbConnection = new DatabaseConnection();
         int categoryId = dbConnection.getCategoryId(category);
@@ -39,8 +40,8 @@ public class Main {
         if (categoryId == -1) {
             System.out.println("Invalid category. Please try again.");
         } else {
-            // Create a new book instance with the given details
-            Book newBook = new Book(title, author, isbn, categoryId);
+            // Create a new book instance with the given details and totalCopies
+            Book newBook = new Book(title, author, isbn, categoryId, totalCopies);
 
             // Attempt to add the book to the database and print the result
             if (newBook.addBookToDatabase()) {
@@ -52,6 +53,7 @@ public class Main {
 
         scanner.close(); // Close the scanner after input is complete
     }
+
 
     // Method to view and display all books
     private static void viewBooks() {
