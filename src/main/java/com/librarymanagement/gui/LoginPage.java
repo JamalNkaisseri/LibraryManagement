@@ -1,6 +1,6 @@
 package com.librarymanagement.gui;
 
-import com.lms.User;
+import com.lms.User;  // Make sure this import is present
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -21,7 +21,7 @@ public class LoginPage {
         this.statusLabel = new Label();
     }
 
-    public void showLoginPage(Stage primaryStage) {
+    public void showLoginPage(Stage primaryStage, LibraryApp libraryApp) {
         // Labels
         Label usernameLabel = new Label("Username:");
         Label passwordLabel = new Label("Password:");
@@ -59,7 +59,7 @@ public class LoginPage {
         layout.setStyle("-fx-padding: 20; -fx-alignment: center;");
 
         // Button actions
-        loginButton.setOnAction(event -> handleLogin(primaryStage));
+        loginButton.setOnAction(event -> handleLogin(primaryStage, libraryApp));
         registerButton.setOnAction(event -> handleRegistration());
         clearButton.setOnAction(event -> clearFields());
 
@@ -70,7 +70,7 @@ public class LoginPage {
         primaryStage.show();
     }
 
-    private void handleLogin(Stage primaryStage) {
+    private void handleLogin(Stage primaryStage, LibraryApp libraryApp) {
         String username = usernameField.getText().trim();
         String password = passwordField.getText().trim();
 
@@ -79,9 +79,18 @@ public class LoginPage {
             if (currentUser.login(username, password)) {
                 statusLabel.setText("Login successful!");
                 statusLabel.setStyle("-fx-text-fill: green;");
-                // Proceed to main application
-                LibraryApp libraryApp = new LibraryApp();
-                libraryApp.showMainPage(primaryStage);
+
+                // Check the role of the user
+                String role = currentUser.getRole();
+
+                // Proceed to the appropriate page based on user role
+                if ("admin".equals(role)) {
+                    // Redirect to Admin Dashboard if user is an admin
+                    libraryApp.showAdminDashboard(primaryStage, currentUser);
+                } else {
+                    // Redirect to Main User Page if user is not an admin
+                    libraryApp.showMainPage(primaryStage, currentUser);
+                }
             } else {
                 statusLabel.setText("Invalid username or password.");
                 statusLabel.setStyle("-fx-text-fill: red;");
@@ -93,9 +102,14 @@ public class LoginPage {
         String username = usernameField.getText().trim();
         String password = passwordField.getText().trim();
 
+        // Assume 'user' as the default role for registration
+        String role = "user"; // Or prompt the user to choose the role
+
         if (validateInput(username, password)) {
             currentUser = new User(username, password);
-            if (currentUser.register()) {
+
+            // Call register() with the role
+            if (currentUser.register(role)) {
                 statusLabel.setText("Registration successful! You can now login.");
                 statusLabel.setStyle("-fx-text-fill: green;");
             } else {

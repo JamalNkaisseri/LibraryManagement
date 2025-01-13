@@ -216,6 +216,7 @@ public class Book {
         }
     }
 
+
     /**
      * Retrieves all books from the database.
      *
@@ -223,17 +224,25 @@ public class Book {
      */
     public static List<Book> viewAllBooks() {
         List<Book> books = new ArrayList<>();
-        String sql = "SELECT book_id, title, author, isbn, category_id FROM books";
-        DatabaseConnection dbConnection = new DatabaseConnection(); // Create instance of DatabaseConnection
+        // Include the total_copies field in the SELECT query
+        String sql = "SELECT book_id, title, author, isbn, category_id, total_copies FROM books";
+        DatabaseConnection dbConnection = new DatabaseConnection();
 
-        try (Connection conn = dbConnection.getConnection(); // Get connection using DatabaseConnection
+        try (Connection conn = dbConnection.getConnection(); // Get database connection
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
             // Process the result set
             while (rs.next()) {
-                Book book = new Book(rs.getString("title"), rs.getString("author"), rs.getString("isbn"), rs.getInt("category_id"), rs.getInt("total_copies"));
-                book.setId(rs.getInt("book_id")); // Set the ID for the Book object
+                // Initialize a Book object with all required fields, including total_copies
+                Book book = new Book(
+                        rs.getString("title"),
+                        rs.getString("author"),
+                        rs.getString("isbn"),
+                        rs.getInt("category_id"),
+                        rs.getInt("total_copies")
+                );
+                book.setId(rs.getInt("book_id")); // Set the book_id
                 books.add(book); // Add the Book object to the list
             }
 
@@ -243,4 +252,5 @@ public class Book {
 
         return books; // Return the list of books
     }
+
 }
