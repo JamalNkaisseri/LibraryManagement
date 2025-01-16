@@ -31,7 +31,7 @@ public class AdminDashboard {
 
     // Updated method without requiring currentUser to be passed again
     public Scene createAdminDashboard(Stage primaryStage) {
-        if (!currentUser.getRole().equals("admin")) {
+        if (!currentUser.getRole().equalsIgnoreCase("admin")) {
             statusLabel.setText("Access Denied: You must be an admin to view this page.");
             return new Scene(new VBox(statusLabel), 400, 200); // Simple access denied message for non-admin users
         }

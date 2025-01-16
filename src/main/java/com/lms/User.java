@@ -84,11 +84,12 @@ public class User {
         return sb.toString();
     }
 
-    // Method to log in a user
     public boolean login(String inputUsername, String inputPassword) {
         try {
             String hashedInputPassword = hashPassword(inputPassword);
             String query = "SELECT password, role FROM users WHERE username = ?";
+
+            System.out.println("Executing login query for username: " + inputUsername); // Debug
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -99,18 +100,27 @@ public class User {
                     String storedPassword = rs.getString("password");
                     String storedRole = rs.getString("role");
 
+                    System.out.println("Found user in database"); // Debug
+                    System.out.println("Stored role: " + storedRole); // Debug
+
                     if (storedPassword.equals(hashedInputPassword)) {
-                        // Set the role of the user after successful login
                         this.role = storedRole;
-                        return true; // Return true if login is successful
+                        System.out.println("Password match successful"); // Debug
+                        return true;
+                    } else {
+                        System.out.println("Password match failed"); // Debug
                     }
+                } else {
+                    System.out.println("No user found with username: " + inputUsername); // Debug
                 }
             }
         } catch (SQLException | NoSuchAlgorithmException e) {
+            System.out.println("Exception during login: " + e.getMessage()); // Debug
             e.printStackTrace();
         }
-        return false; // Login failed
+        return false;
     }
+
 
     // Method to get the user's role
     public String getRole() {
