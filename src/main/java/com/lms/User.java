@@ -121,10 +121,14 @@ public class User {
         return false;
     }
 
-
     // Method to get the user's role
     public String getRole() {
         return role; // Return the role (e.g., "admin" or "user")
+    }
+
+    // Method to get the username
+    public String getUsername() {
+        return username; // Return the username
     }
 
     // Additional methods for other user-related operations can go here
