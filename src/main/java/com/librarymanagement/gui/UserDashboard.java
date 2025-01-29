@@ -24,7 +24,7 @@ public class UserDashboard {
     private TextField searchField;
     private FilteredList<Book> filteredBooks;
     private StackPane contentArea;
-    private HBox searchBox; // New field to hold the search container
+    private HBox searchBox;
 
     public UserDashboard(User user) {
         this.currentUser = user;
@@ -44,7 +44,7 @@ public class UserDashboard {
         VBox leftPanel = createLeftPanel(primaryStage, libraryApp);
 
         contentArea.setPadding(new Insets(20));
-        contentArea.getChildren().add(createAvailableBooksSection());
+        contentArea.getChildren().add(createAvailableBooksSection(primaryStage));  // Modified to pass primaryStage
 
         mainLayout.setLeft(leftPanel);
         mainLayout.setCenter(contentArea);
@@ -68,8 +68,8 @@ public class UserDashboard {
         availableBooksLink.getStyleClass().add("menu-item");
         availableBooksLink.setOnAction(e -> {
             contentArea.getChildren().clear();
-            contentArea.getChildren().add(createAvailableBooksSection());
-            searchField.setVisible(true); // Show search when viewing available books
+            contentArea.getChildren().add(createAvailableBooksSection(primaryStage));  // Modified to pass primaryStage
+            searchField.setVisible(true);
             searchBox.setVisible(true);
         });
 
@@ -77,8 +77,8 @@ public class UserDashboard {
         borrowedBooksLink.getStyleClass().add("menu-item");
         borrowedBooksLink.setOnAction(e -> {
             contentArea.getChildren().clear();
-            contentArea.getChildren().add(createBorrowedBooksSection());
-            searchField.setVisible(false); // Hide search when viewing borrowed books
+            contentArea.getChildren().add(createBorrowedBooksSection(primaryStage));  // Modified to pass primaryStage
+            searchField.setVisible(false);
             searchBox.setVisible(false);
         });
 
@@ -101,7 +101,6 @@ public class UserDashboard {
         Label welcomeLabel = new Label("Welcome, " + currentUser.getUsername() + "!");
         welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
 
-        // Create search field and its container
         searchField = new TextField();
         searchField.setPromptText("🔍 Search books by title or author...");
         searchField.getStyleClass().add("search-field");
@@ -118,7 +117,6 @@ public class UserDashboard {
             }
         });
 
-        // Create a container for the search field
         searchBox = new HBox(searchField);
         searchBox.setAlignment(Pos.CENTER);
 
@@ -136,7 +134,7 @@ public class UserDashboard {
         return topSection;
     }
 
-    private VBox createAvailableBooksSection() {
+    private VBox createAvailableBooksSection(Stage primaryStage) {  // Added primaryStage parameter
         VBox section = new VBox(10);
         section.setPadding(new Insets(10));
 
@@ -177,6 +175,9 @@ public class UserDashboard {
 
         bookTable.getColumns().addAll(titleCol, authorCol, isbnCol, categoryCol, availableCol);
 
+        // Add this line after creating the bookTable
+        setupBookDetailsHandler(bookTable, primaryStage);
+
         Button borrowButton = new Button("Borrow Selected Book");
         borrowButton.getStyleClass().add("borrow-button");
         borrowButton.setOnAction(e -> handleBorrowBook());
@@ -187,7 +188,7 @@ public class UserDashboard {
         return section;
     }
 
-    private VBox createBorrowedBooksSection() {
+    private VBox createBorrowedBooksSection(Stage primaryStage) {  // Added primaryStage parameter
         VBox section = new VBox(10);
         section.setPadding(new Insets(10));
 
@@ -208,10 +209,25 @@ public class UserDashboard {
 
         borrowedBooksTable.getColumns().addAll(titleCol, authorCol, isbnCol, dueDateCol);
 
+        // Add this line after creating the borrowedBooksTable
+        setupBookDetailsHandler(borrowedBooksTable, primaryStage);
+
         refreshBorrowedBooksTable();
 
         section.getChildren().addAll(borrowedBooksTable);
         return section;
+    }
+
+    private void setupBookDetailsHandler(TableView<Book> table, Stage primaryStage) {
+        table.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                Book selectedBook = table.getSelectionModel().getSelectedItem();
+                if (selectedBook != null) {
+                    BookDetailsDialog dialog = new BookDetailsDialog(selectedBook, primaryStage);
+                    dialog.show();
+                }
+            }
+        });
     }
 
     private void handleBorrowBook() {

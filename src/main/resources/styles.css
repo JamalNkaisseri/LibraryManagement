@@ -113,3 +113,14 @@
     -fx-background-color: #ecf0f1; /* Light hover color */
     -fx-text-fill: #2980b9; /* Blue hover text */
 }
+
+.dialog-button {
+    -fx-background-color: #3498db;
+    -fx-text-fill: white;
+    -fx-padding: 8px 16px;
+    -fx-cursor: hand;
+}
+
+.dialog-button:hover {
+    -fx-background-color: #2980b9;
+}
