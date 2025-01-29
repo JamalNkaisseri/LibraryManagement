@@ -1,10 +1,11 @@
 package com.librarymanagement.gui;
 
-import com.lms.User;  // Make sure this import is present
+import com.lms.User;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -22,86 +23,89 @@ public class LoginPage {
     }
 
     public void showLoginPage(Stage primaryStage, LibraryApp libraryApp) {
-        // Labels
-        Label usernameLabel = new Label("Username:");
-        Label passwordLabel = new Label("Password:");
-        Label roleLabel = new Label("Role:");
+        VBox mainContainer = new VBox(20);
+        mainContainer.setAlignment(Pos.CENTER);
+        mainContainer.setPadding(new Insets(40));
+        mainContainer.getStyleClass().add("login-background");
 
-        // Configure text fields
-        usernameField.setPromptText("Enter your username");
-        passwordField.setPromptText("Enter your password");
+        Label titleLabel = new Label("Library Management System");
+        titleLabel.getStyleClass().add("title-label");
 
-        // Dropdown for role selection
-        ComboBox<String> roleComboBox = new ComboBox<>();
-        roleComboBox.getItems().addAll("Admin", "User");
-        roleComboBox.setValue("User"); // Default role
+        GridPane loginForm = createLoginForm(primaryStage, libraryApp);
 
-        // Buttons
-        Button loginButton = new Button("Login");
-        Button registerButton = new Button("Register");
-        Button clearButton = new Button("Clear");
+        statusLabel.getStyleClass().add("status-label");
 
-        // Configure status label
-        statusLabel.setWrapText(true);
-        statusLabel.setMaxWidth(300);
+        mainContainer.getChildren().addAll(titleLabel, loginForm, statusLabel);
 
-        // Button container
-        HBox buttonBox = new HBox(10);
-        buttonBox.setAlignment(Pos.CENTER);
-        buttonBox.getChildren().addAll(loginButton, registerButton, clearButton);
+        Scene scene = new Scene(mainContainer, 500, 600);
+        scene.getStylesheets().add(getClass().getResource("/login-styles.css").toExternalForm());
 
-        // Main layout
-        VBox layout = new VBox(10);
-        layout.setPadding(new Insets(20));
-        layout.setAlignment(Pos.CENTER);
-        layout.getChildren().addAll(
-                usernameLabel,
-                usernameField,
-                passwordLabel,
-                passwordField,
-                roleLabel,
-                roleComboBox,
-                buttonBox,
-                statusLabel
-        );
-        layout.setStyle("-fx-padding: 20; -fx-alignment: center;");
-
-        // Button actions
-        loginButton.setOnAction(event -> handleLogin(primaryStage, libraryApp, roleComboBox.getValue()));
-        registerButton.setOnAction(event -> handleRegistration(roleComboBox.getValue()));
-        clearButton.setOnAction(event -> clearFields());
-
-        // Scene setup
-        Scene scene = new Scene(layout, 400, 350);
         primaryStage.setScene(scene);
-        primaryStage.setTitle("Library Management System - Login");
+        primaryStage.setTitle("Library Management System");
+        primaryStage.centerOnScreen();
         primaryStage.show();
     }
 
+    private GridPane createLoginForm(Stage primaryStage, LibraryApp libraryApp) {
+        GridPane form = new GridPane();
+        form.setAlignment(Pos.CENTER);
+        form.setHgap(10);
+        form.setVgap(15);
+        form.getStyleClass().add("login-form");
 
-    private void handleLogin(Stage primaryStage, LibraryApp libraryApp, String role) {
+        Label usernameLabel = new Label("Username:");
+        usernameField = new TextField();
+        usernameField.setPromptText("Enter your username");
+        usernameField.getStyleClass().add("input-field");
+
+        Label passwordLabel = new Label("Password:");
+        passwordField = new PasswordField();
+        passwordField.setPromptText("Enter your password");
+        passwordField.getStyleClass().add("input-field");
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER);
+
+        Button loginButton = new Button("Login");
+        loginButton.getStyleClass().add("action-button");
+        loginButton.setOnAction(event -> handleLogin(primaryStage, libraryApp));
+
+        Button registerButton = new Button("Register");
+        registerButton.getStyleClass().add("action-button");
+        registerButton.setOnAction(event -> handleRegistration());
+
+        Button clearButton = new Button("Clear");
+        clearButton.getStyleClass().add("action-button");
+        clearButton.setOnAction(event -> clearFields());
+
+        buttonBox.getChildren().addAll(loginButton, registerButton, clearButton);
+
+        form.add(usernameLabel, 0, 0);
+        form.add(usernameField, 1, 0);
+        form.add(passwordLabel, 0, 1);
+        form.add(passwordField, 1, 1);
+        form.add(buttonBox, 1, 2);
+
+        return form;
+    }
+
+
+
+    private void handleLogin(Stage primaryStage, LibraryApp libraryApp) {
         String username = usernameField.getText().trim();
         String password = passwordField.getText().trim();
 
-        System.out.println("Attempting login with username: " + username); // Debug
-
         if (validateInput(username, password)) {
             currentUser = new User(username, password);
-            System.out.println("Input validated, attempting login..."); // Debug
 
             if (currentUser.login(username, password)) {
-                String fetchedRole = currentUser.getRole();
-                System.out.println("Login successful. Fetched role: " + fetchedRole); // Debug
-
-                if ("Admin".equalsIgnoreCase(fetchedRole)) {
-                    System.out.println("Role matches Admin, showing admin dashboard"); // Debug
+                // Check the role to determine if the user is an admin
+                if ("admin".equalsIgnoreCase(currentUser.getRole())) {
                     libraryApp.showAdminDashboard(primaryStage, currentUser);
                 } else {
-                    System.out.println("Role does not match Admin, showing main page"); // Debug
                     libraryApp.showMainPage(primaryStage, currentUser);
                 }
             } else {
-                System.out.println("Login failed in User.login()"); // Debug
                 statusLabel.setText("Invalid username or password.");
                 statusLabel.setStyle("-fx-text-fill: red;");
             }
@@ -110,14 +114,14 @@ public class LoginPage {
 
 
 
-    private void handleRegistration(String role) {
+    private void handleRegistration() {
         String username = usernameField.getText().trim();
         String password = passwordField.getText().trim();
 
         if (validateInput(username, password)) {
             currentUser = new User(username, password);
 
-            if (currentUser.register(role)) {
+            if (currentUser.register("User")) {
                 statusLabel.setText("Registration successful! You can now login.");
                 statusLabel.setStyle("-fx-text-fill: green;");
             } else {

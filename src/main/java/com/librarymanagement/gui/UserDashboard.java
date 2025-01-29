@@ -6,12 +6,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
 import java.util.List;
@@ -23,64 +23,94 @@ public class UserDashboard {
     private Label statusLabel;
     private TextField searchField;
     private FilteredList<Book> filteredBooks;
+    private StackPane contentArea;
+    private HBox searchBox; // New field to hold the search container
 
     public UserDashboard(User user) {
         this.currentUser = user;
         this.statusLabel = new Label();
-        this.statusLabel.setStyle("-fx-text-fill: green;");
+        this.statusLabel.setStyle("-fx-text-fill: green; -fx-font-size: 12px;");
+        this.contentArea = new StackPane();
     }
 
     public Scene createUserDashboard(Stage primaryStage, LibraryApp libraryApp) {
         BorderPane mainLayout = new BorderPane();
-        mainLayout.setPadding(new Insets(10));
+        mainLayout.setStyle("-fx-background-color: #f4f6f9;");
+        mainLayout.setPadding(new Insets(20));
 
-        // Create the top section with search and user info
-        VBox topSection = createTopSection(primaryStage, libraryApp);
+        HBox topSection = createTopSection(primaryStage, libraryApp);
         mainLayout.setTop(topSection);
 
-        // Create tabs for available books and borrowed books
-        TabPane tabPane = new TabPane();
+        VBox leftPanel = createLeftPanel(primaryStage, libraryApp);
 
-        // Available Books Tab
-        Tab availableBooksTab = new Tab("Available Books");
-        availableBooksTab.setContent(createAvailableBooksSection());
-        availableBooksTab.setClosable(false);
+        contentArea.setPadding(new Insets(20));
+        contentArea.getChildren().add(createAvailableBooksSection());
 
-        // Borrowed Books Tab
-        Tab borrowedBooksTab = new Tab("My Borrowed Books");
-        borrowedBooksTab.setContent(createBorrowedBooksSection());
-        borrowedBooksTab.setClosable(false);
+        mainLayout.setLeft(leftPanel);
+        mainLayout.setCenter(contentArea);
 
-        tabPane.getTabs().addAll(availableBooksTab, borrowedBooksTab);
-        mainLayout.setCenter(tabPane);
+        HBox bottomBox = new HBox(statusLabel);
+        bottomBox.setPadding(new Insets(10, 0, 0, 0));
+        mainLayout.setBottom(bottomBox);
 
-        // Status label at the bottom
-        mainLayout.setBottom(statusLabel);
+        Scene scene = new Scene(mainLayout, 1100, 700);
+        scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
 
-        return new Scene(mainLayout, 1000, 600);
+        return scene;
     }
 
-    private VBox createTopSection(Stage primaryStage, LibraryApp libraryApp) {
-        VBox topSection = new VBox(10);
-        topSection.setPadding(new Insets(10));
+    private VBox createLeftPanel(Stage primaryStage, LibraryApp libraryApp) {
+        VBox leftPanel = new VBox(20);
+        leftPanel.setPadding(new Insets(20));
+        leftPanel.getStyleClass().add("left-panel");
 
-        // User information
+        Hyperlink availableBooksLink = new Hyperlink("Available Books");
+        availableBooksLink.getStyleClass().add("menu-item");
+        availableBooksLink.setOnAction(e -> {
+            contentArea.getChildren().clear();
+            contentArea.getChildren().add(createAvailableBooksSection());
+            searchField.setVisible(true); // Show search when viewing available books
+            searchBox.setVisible(true);
+        });
+
+        Hyperlink borrowedBooksLink = new Hyperlink("My Borrowed Books");
+        borrowedBooksLink.getStyleClass().add("menu-item");
+        borrowedBooksLink.setOnAction(e -> {
+            contentArea.getChildren().clear();
+            contentArea.getChildren().add(createBorrowedBooksSection());
+            searchField.setVisible(false); // Hide search when viewing borrowed books
+            searchBox.setVisible(false);
+        });
+
+        Hyperlink profileLink = new Hyperlink("Profile");
+        profileLink.getStyleClass().add("profile-link");
+        profileLink.setOnAction(e -> {
+            // Implement Profile page display logic
+        });
+
+        leftPanel.getChildren().addAll(availableBooksLink, borrowedBooksLink, profileLink);
+
+        return leftPanel;
+    }
+
+    private HBox createTopSection(Stage primaryStage, LibraryApp libraryApp) {
+        HBox topSection = new HBox(20);
+        topSection.setAlignment(Pos.CENTER_LEFT);
+        topSection.setPadding(new Insets(0, 0, 20, 0));
+
         Label welcomeLabel = new Label("Welcome, " + currentUser.getUsername() + "!");
-        welcomeLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
 
-        // Search section
-        HBox searchBox = new HBox(10);
+        // Create search field and its container
         searchField = new TextField();
-        searchField.setPromptText("Search books by title or author...");
-        searchField.setPrefWidth(300);
+        searchField.setPromptText("🔍 Search books by title or author...");
+        searchField.getStyleClass().add("search-field");
+        searchField.setPrefWidth(350);
 
-        // Add search listener
         searchField.textProperty().addListener((observable, oldValue, newValue) -> {
             if (filteredBooks != null) {
                 filteredBooks.setPredicate(book -> {
-                    if (newValue == null || newValue.isEmpty()) {
-                        return true;
-                    }
+                    if (newValue == null || newValue.isEmpty()) return true;
                     String lowerCaseFilter = newValue.toLowerCase();
                     return book.getTitle().toLowerCase().contains(lowerCaseFilter) ||
                             book.getAuthor().toLowerCase().contains(lowerCaseFilter);
@@ -88,15 +118,20 @@ public class UserDashboard {
             }
         });
 
-        // Logout button
+        // Create a container for the search field
+        searchBox = new HBox(searchField);
+        searchBox.setAlignment(Pos.CENTER);
+
         Button logoutButton = new Button("Logout");
+        logoutButton.getStyleClass().add("logout-button");
         logoutButton.setOnAction(e -> {
             LoginPage loginPage = new LoginPage();
             loginPage.showLoginPage(primaryStage, libraryApp);
         });
 
-        searchBox.getChildren().addAll(new Label("Search:"), searchField, logoutButton);
-        topSection.getChildren().addAll(welcomeLabel, searchBox);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        topSection.getChildren().addAll(welcomeLabel, spacer, searchBox, logoutButton);
 
         return topSection;
     }
@@ -105,11 +140,9 @@ public class UserDashboard {
         VBox section = new VBox(10);
         section.setPadding(new Insets(10));
 
-        // Create table
         bookTable = new TableView<>();
         bookTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Create columns
         TableColumn<Book, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
 
@@ -144,11 +177,10 @@ public class UserDashboard {
 
         bookTable.getColumns().addAll(titleCol, authorCol, isbnCol, categoryCol, availableCol);
 
-        // Borrow button
         Button borrowButton = new Button("Borrow Selected Book");
+        borrowButton.getStyleClass().add("borrow-button");
         borrowButton.setOnAction(e -> handleBorrowBook());
 
-        // Load initial data
         refreshBookTable();
 
         section.getChildren().addAll(bookTable, borrowButton);
@@ -159,11 +191,9 @@ public class UserDashboard {
         VBox section = new VBox(10);
         section.setPadding(new Insets(10));
 
-        // Create borrowed books table
         borrowedBooksTable = new TableView<>();
         borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Create columns
         TableColumn<Book, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
 
@@ -178,14 +208,9 @@ public class UserDashboard {
 
         borrowedBooksTable.getColumns().addAll(titleCol, authorCol, isbnCol, dueDateCol);
 
-        // Return button
-        Button returnButton = new Button("Return Selected Book");
-        returnButton.setOnAction(e -> handleReturnBook());
-
-        // Load borrowed books
         refreshBorrowedBooksTable();
 
-        section.getChildren().addAll(borrowedBooksTable, returnButton);
+        section.getChildren().addAll(borrowedBooksTable);
         return section;
     }
 
@@ -208,24 +233,6 @@ public class UserDashboard {
             }
         } else {
             statusLabel.setText("Please select a book to borrow.");
-            statusLabel.setStyle("-fx-text-fill: red;");
-        }
-    }
-
-    private void handleReturnBook() {
-        Book selectedBook = borrowedBooksTable.getSelectionModel().getSelectedItem();
-        if (selectedBook != null) {
-            if (selectedBook.returnBook(currentUser.getUsername())) {
-                refreshBookTable();
-                refreshBorrowedBooksTable();
-                statusLabel.setText("Book returned successfully!");
-                statusLabel.setStyle("-fx-text-fill: green;");
-            } else {
-                statusLabel.setText("Failed to return book.");
-                statusLabel.setStyle("-fx-text-fill: red;");
-            }
-        } else {
-            statusLabel.setText("Please select a book to return.");
             statusLabel.setStyle("-fx-text-fill: red;");
         }
     }

@@ -11,6 +11,8 @@ public class Book {
     private String isbn;
     private int categoryId;
     private int totalCopies;
+    private Date loanDate;
+    private Date dueDate;
 
     // Constructor
     public Book(String title, String author, String isbn, int categoryId, int totalCopies) {
@@ -66,6 +68,22 @@ public class Book {
         return totalCopies;
     }
 
+    public Date getLoanDate() {
+        return loanDate;
+    }
+
+    public void setLoanDate(Date loanDate) {
+        this.loanDate = loanDate;
+          }
+
+    public Date getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(Date dueDate) {
+        this.dueDate = dueDate;
+    }
+
     public int getAvailableCopies() {
         String sql = "SELECT COUNT(*) AS available FROM copies WHERE book_id = ? AND status = 'available'";
         DatabaseConnection dbConnection = new DatabaseConnection();
@@ -85,7 +103,12 @@ public class Book {
     }
 
     public boolean borrowBook(String username) {
-        String borrowSql = "UPDATE copies SET status = 'borrowed', borrowed_by = ?, borrowed_date = NOW() WHERE book_id = ? AND status = 'available' LIMIT 1";
+        String borrowSql = "INSERT INTO loan (copy_id, user_id, loan_date, due_date, status) " +
+                "SELECT c.copy_id, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed' " +
+                "FROM copies c " +
+                "JOIN users u ON u.username = ? " +
+                "WHERE c.book_id = ? AND NOT EXISTS " +
+                "(SELECT 1 FROM loan l WHERE l.copy_id = c.copy_id AND l.status = 'borrowed') LIMIT 1";
         DatabaseConnection dbConnection = new DatabaseConnection();
 
         try (Connection conn = dbConnection.getConnection();
@@ -101,28 +124,64 @@ public class Book {
         }
     }
 
+
     public boolean returnBook(String username) {
-        String returnSql = "UPDATE copies SET status = 'available', borrowed_by = NULL, borrowed_date = NULL WHERE book_id = ? AND borrowed_by = ? LIMIT 1";
+        // Update the loan table to mark the book as returned
+        String returnLoanSql = "UPDATE loan SET status = 'returned', return_date = CURDATE() " +
+                "WHERE user_id = (SELECT id FROM users WHERE username = ?) " +
+                "AND status = 'borrowed' AND return_date IS NULL LIMIT 1";
+
+        // Update the copies table to mark the copy as available again
+        String returnCopySql = "UPDATE copies SET status = 'available' " +
+                "WHERE book_id = ? AND status = 'borrowed' LIMIT 1";
+
         DatabaseConnection dbConnection = new DatabaseConnection();
 
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(returnSql)) {
-            stmt.setInt(1, this.id);
-            stmt.setString(2, username);
+        try (Connection conn = dbConnection.getConnection()) {
+            // Update the loan table first
+            try (PreparedStatement stmt1 = conn.prepareStatement(returnLoanSql)) {
+                stmt1.setString(1, username);
+                int rowsAffectedLoan = stmt1.executeUpdate();
 
-            int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0;
+                if (rowsAffectedLoan == 0) {
+                    // If no rows were updated, no borrowed book found for this user
+                    return false;
+                }
+            }
+
+            // Then update the copies table
+            try (PreparedStatement stmt2 = conn.prepareStatement(returnCopySql)) {
+                stmt2.setInt(1, this.id); // Use book_id here
+                int rowsAffectedCopy = stmt2.executeUpdate();
+
+                if (rowsAffectedCopy == 0) {
+                    // If no rows were updated, something went wrong
+                    return false;
+                }
+            }
+
+            // If both updates were successful, return true
+            return true;
+
         } catch (SQLException e) {
             System.out.println("Error returning book: " + e.getMessage());
             return false;
         }
     }
 
+
+
+
     public static List<Book> viewBorrowedBooks(String username) {
         List<Book> borrowedBooks = new ArrayList<>();
-        String sql = "SELECT b.book_id, b.title, b.author, b.isbn, b.category_id, b.total_copies, c.borrowed_date " +
-                "FROM books b JOIN copies c ON b.book_id = c.book_id " +
-                "WHERE c.borrowed_by = ? AND c.status = 'borrowed'";
+        String sql = "SELECT b.book_id, b.title, b.author, b.isbn, b.category_id, b.total_copies, " +
+                "l.loan_date, l.due_date " +
+                "FROM books b " +
+                "JOIN copies c ON b.book_id = c.book_id " +
+                "JOIN loan l ON c.copy_id = l.copy_id " +
+                "WHERE l.user_id = (SELECT id FROM users WHERE username = ?) " +
+                "AND l.status = 'borrowed'";
+
         DatabaseConnection dbConnection = new DatabaseConnection();
 
         try (Connection conn = dbConnection.getConnection();
@@ -139,6 +198,8 @@ public class Book {
                         rs.getInt("total_copies")
                 );
                 book.setId(rs.getInt("book_id"));
+                book.setLoanDate(rs.getDate("loan_date"));
+                book.setDueDate(rs.getDate("due_date"));
                 borrowedBooks.add(book);
             }
         } catch (SQLException e) {

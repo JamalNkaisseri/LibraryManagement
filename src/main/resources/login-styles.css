@@ -1,0 +1,49 @@
+/* Login Styles */
+.login-background {
+    -fx-background-color: linear-gradient(to bottom right, #3494E6, #EC6EAD);
+}
+
+.title-label {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+}
+
+.login-form {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-background-radius: 10;
+    -fx-padding: 30;
+}
+
+.input-field {
+    -fx-background-color: white;
+    -fx-background-radius: 5;
+    -fx-border-color: #BDC3C7;
+    -fx-border-radius: 5;
+    -fx-padding: 8;
+}
+
+.input-field:focused {
+    -fx-border-color: #3494E6;
+}
+
+.role-selector {
+    -fx-background-color: white;
+    -fx-background-radius: 5;
+}
+
+.action-button {
+    -fx-background-color: #3494E6;
+    -fx-text-fill: white;
+    -fx-background-radius: 5;
+    -fx-padding: 8 15;
+}
+
+.action-button:hover {
+    -fx-background-color: #2980B9;
+}
+
+.status-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: white;
+}
