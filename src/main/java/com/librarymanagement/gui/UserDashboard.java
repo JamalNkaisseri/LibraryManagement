@@ -85,7 +85,8 @@ public class UserDashboard {
         Hyperlink profileLink = new Hyperlink("Profile");
         profileLink.getStyleClass().add("profile-link");
         profileLink.setOnAction(e -> {
-            // Implement Profile page display logic
+            UserProfileDialog profileDialog = new UserProfileDialog(currentUser, primaryStage);
+            profileDialog.show();
         });
 
         leftPanel.getChildren().addAll(availableBooksLink, borrowedBooksLink, profileLink);

@@ -8,15 +8,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class User {
-    private static final DatabaseConnection dbConnection = new DatabaseConnection(); // Single instance of DatabaseConnection
+    private static final DatabaseConnection dbConnection = new DatabaseConnection();
     private final String username;
-    private final String password; // Store the raw password temporarily
-    private String role; // Store the user's role (e.g., "admin" or "user")
+    private final String password;
+    private String role;
+    private int userId; // Added to store the user's ID
 
     // Constructor for new user registration
     public User(String username, String password) {
         this.username = username;
-        this.password = password; // Store the raw password temporarily
+        this.password = password;
     }
 
     // Constructor for an existing user (with role)
@@ -24,20 +25,39 @@ public class User {
         this.username = username;
         this.password = password;
         this.role = role;
+        this.userId = fetchUserId(); // Get user ID when creating existing user
+    }
+
+    // Method to fetch user ID from database
+    private int fetchUserId() {
+        try {
+            String query = "SELECT id FROM users WHERE username = ?";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(query)) {
+                pstmt.setString(1, username);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt("id");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return -1;
     }
 
     // Method to register a new user
     public boolean register(String role) {
         try {
             if (usernameExists(username)) {
-                return false; // Username already exists
+                return false;
             }
 
             String hashedPassword = hashPassword(password);
             return saveUserToDatabase(username, hashedPassword, role);
         } catch (SQLException | NoSuchAlgorithmException e) {
             e.printStackTrace();
-            return false; // Registration failed
+            return false;
         }
     }
 
@@ -51,10 +71,10 @@ public class User {
             ResultSet rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                return rs.getInt(1) > 0; // Return true if count > 0
+                return rs.getInt(1) > 0;
             }
         }
-        return false; // Return false if no result or error occurs
+        return false;
     }
 
     // Method to save a new user to the database
@@ -65,9 +85,9 @@ public class User {
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
             pstmt.setString(2, hashedPassword);
-            pstmt.setString(3, role); // Insert the user's role
+            pstmt.setString(3, role);
             pstmt.executeUpdate();
-            return true; // Registration successful
+            return true;
         }
     }
 
@@ -87,9 +107,7 @@ public class User {
     public boolean login(String inputUsername, String inputPassword) {
         try {
             String hashedInputPassword = hashPassword(inputPassword);
-            String query = "SELECT password, role FROM users WHERE username = ?";
-
-            System.out.println("Executing login query for username: " + inputUsername); // Debug
+            String query = "SELECT id, password, role FROM users WHERE username = ?";
 
             try (Connection conn = dbConnection.getConnection();
                  PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -99,37 +117,105 @@ public class User {
                 if (rs.next()) {
                     String storedPassword = rs.getString("password");
                     String storedRole = rs.getString("role");
-
-                    System.out.println("Found user in database"); // Debug
-                    System.out.println("Stored role: " + storedRole); // Debug
+                    int storedId = rs.getInt("id");
 
                     if (storedPassword.equals(hashedInputPassword)) {
                         this.role = storedRole;
-                        System.out.println("Password match successful"); // Debug
+                        this.userId = storedId;
                         return true;
-                    } else {
-                        System.out.println("Password match failed"); // Debug
                     }
-                } else {
-                    System.out.println("No user found with username: " + inputUsername); // Debug
                 }
             }
         } catch (SQLException | NoSuchAlgorithmException e) {
-            System.out.println("Exception during login: " + e.getMessage()); // Debug
             e.printStackTrace();
         }
         return false;
     }
 
-    // Method to get the user's role
+    public boolean updatePassword(String currentPassword, String newPassword) {
+        try {
+            // Verify current password
+            String hashedCurrentPassword = hashPassword(currentPassword);
+            String query = "SELECT password FROM users WHERE username = ?";
+
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(query)) {
+                pstmt.setString(1, username);
+                ResultSet rs = pstmt.executeQuery();
+
+                if (rs.next() && rs.getString("password").equals(hashedCurrentPassword)) {
+                    // Update password
+                    String hashedNewPassword = hashPassword(newPassword);
+                    String updateQuery = "UPDATE users SET password = ? WHERE username = ?";
+                    try (PreparedStatement updateStmt = conn.prepareStatement(updateQuery)) {
+                        updateStmt.setString(1, hashedNewPassword);
+                        updateStmt.setString(2, username);
+                        return updateStmt.executeUpdate() > 0;
+                    }
+                }
+            }
+        } catch (SQLException | NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public static class UserStats {
+        private final int totalBorrowed;
+        private final int currentlyBorrowed;
+        private final double totalFines;
+
+        public UserStats(int totalBorrowed, int currentlyBorrowed, double totalFines) {
+            this.totalBorrowed = totalBorrowed;
+            this.currentlyBorrowed = currentlyBorrowed;
+            this.totalFines = totalFines;
+        }
+
+        public int getTotalBorrowed() { return totalBorrowed; }
+        public int getCurrentlyBorrowed() { return currentlyBorrowed; }
+        public double getTotalFines() { return totalFines; }
+    }
+
+    public UserStats getUserStats() {
+        try {
+            String query = """
+                SELECT 
+                    COUNT(*) as total_borrowed,
+                    SUM(CASE WHEN return_date IS NULL AND status = 'Borrowed' THEN 1 ELSE 0 END) as currently_borrowed,
+                    SUM(fine) as total_fines
+                FROM loan
+                WHERE user_id = ?
+            """;
+
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(query)) {
+                pstmt.setInt(1, userId);
+                ResultSet rs = pstmt.executeQuery();
+
+                if (rs.next()) {
+                    return new UserStats(
+                            rs.getInt("total_borrowed"),
+                            rs.getInt("currently_borrowed"),
+                            rs.getDouble("total_fines")
+                    );
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return new UserStats(0, 0, 0.0);
+    }
+
+    // Getter methods
     public String getRole() {
-        return role; // Return the role (e.g., "admin" or "user")
+        return role;
     }
 
-    // Method to get the username
     public String getUsername() {
-        return username; // Return the username
+        return username;
     }
 
-    // Additional methods for other user-related operations can go here
+    public int getUserId() {
+        return userId;
+    }
 }
