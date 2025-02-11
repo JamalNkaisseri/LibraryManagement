@@ -6,6 +6,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class User {
     private static final DatabaseConnection dbConnection = new DatabaseConnection();
@@ -217,5 +219,56 @@ public class User {
 
     public int getUserId() {
         return userId;
+    }
+
+    // Constructor for full user details
+    public User(String username, String email, String password, String role) {
+        this.username = username;
+        this.password = password;
+        this.role = role;
+        this.userId = fetchUserId(); // Get user ID when creating existing user
+    }
+
+    // Method to register a new user from admin dashboard
+    public boolean registerUser() {
+        return register(role);
+    }
+
+    // Method to delete a user
+    public boolean deleteUser() {
+        try {
+            String query = "DELETE FROM users WHERE username = ?";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(query)) {
+                pstmt.setString(1, username);
+                int rowsAffected = pstmt.executeUpdate();
+                return rowsAffected > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Method to view all users
+    public static List<User> viewAllUsers() {
+        List<User> users = new ArrayList<>();
+        try {
+            String query = "SELECT username, role FROM users";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(query);
+                 ResultSet rs = pstmt.executeQuery()) {
+
+                while (rs.next()) {
+                    String username = rs.getString("username");
+                    String role = rs.getString("role");
+                    // Using a dummy password as we don't want to retrieve actual passwords
+                    users.add(new User(username, "dummy", role));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return users;
     }
 }
