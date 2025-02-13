@@ -24,73 +24,43 @@ public class Book {
     }
 
     // Getters and setters
-    public int getId() {
-        return id;
-    }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getAuthor() { return author; }
+    public void setAuthor(String author) { this.author = author; }
+    public String getIsbn() { return isbn; }
+    public void setIsbn(String isbn) { this.isbn = isbn; }
+    public int getCategoryId() { return categoryId; }
+    public void setCategoryId(int categoryId) { this.categoryId = categoryId; }
+    public int getTotalCopies() { return totalCopies; }
+    public Date getLoanDate() { return loanDate; }
+    public void setLoanDate(Date loanDate) { this.loanDate = loanDate; }
+    public Date getDueDate() { return dueDate; }
+    public void setDueDate(Date dueDate) { this.dueDate = dueDate; }
 
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
-    public String getIsbn() {
-        return isbn;
-    }
-
-    public void setIsbn(String isbn) {
-        this.isbn = isbn;
-    }
-
-    public int getCategoryId() {
-        return categoryId;
-    }
-
-    public void setCategoryId(int categoryId) {
-        this.categoryId = categoryId;
-    }
-
-    public int getTotalCopies() {
-        return totalCopies;
-    }
-
-    public Date getLoanDate() {
-        return loanDate;
-    }
-
-    public void setLoanDate(Date loanDate) {
-        this.loanDate = loanDate;
-          }
-
-    public Date getDueDate() {
-        return dueDate;
-    }
-
-    public void setDueDate(Date dueDate) {
-        this.dueDate = dueDate;
-    }
-
+    // Get available copies count
     public int getAvailableCopies() {
-        String sql = "SELECT COUNT(*) AS available FROM copies WHERE book_id = ? AND status = 'available'";
-        DatabaseConnection dbConnection = new DatabaseConnection();
+        String sql = """
+            SELECT 
+                COALESCE(
+                    (SELECT COUNT(*) 
+                     FROM copies 
+                     WHERE book_id = ? AND status = 'available'),
+                    0
+                ) as available,
+                b.total_copies
+            FROM books b
+            WHERE b.book_id = ?
+        """;
 
+        DatabaseConnection dbConnection = new DatabaseConnection();
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             stmt.setInt(1, this.id);
+            stmt.setInt(2, this.id);
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
@@ -102,88 +72,220 @@ public class Book {
         return 0;
     }
 
-    public boolean borrowBook(String username) {
-        String borrowSql = "INSERT INTO loan (copy_id, user_id, loan_date, due_date, status) " +
-                "SELECT c.copy_id, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed' " +
-                "FROM copies c " +
-                "JOIN users u ON u.username = ? " +
-                "WHERE c.book_id = ? AND NOT EXISTS " +
-                "(SELECT 1 FROM loan l WHERE l.copy_id = c.copy_id AND l.status = 'borrowed') LIMIT 1";
+    // Add new book to database
+    public boolean addBookToDatabase() {
         DatabaseConnection dbConnection = new DatabaseConnection();
+        Connection conn = null;
+        try {
+            conn = dbConnection.getConnection();
+            conn.setAutoCommit(false);  // Start transaction
 
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(borrowSql)) {
-            stmt.setString(1, username);
-            stmt.setInt(2, this.id);
+            // First insert the book
+            String bookSql = "INSERT INTO books (title, author, isbn, category_id, total_copies) VALUES (?, ?, ?, ?, ?)";
 
-            int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0;
+            try (PreparedStatement stmt = conn.prepareStatement(bookSql, Statement.RETURN_GENERATED_KEYS)) {
+                stmt.setString(1, this.title);
+                stmt.setString(2, this.author);
+                stmt.setString(3, this.isbn);
+                stmt.setInt(4, this.categoryId);
+                stmt.setInt(5, this.totalCopies);
+
+                int rowsAffected = stmt.executeUpdate();
+
+                if (rowsAffected > 0) {
+                    // Get the generated book_id
+                    ResultSet rs = stmt.getGeneratedKeys();
+                    if (rs.next()) {
+                        int bookId = rs.getInt(1);
+
+                        // Insert individual copies with barcode and condition
+                        String copySql = "INSERT INTO copies (book_id, barcode, status, `condition`) VALUES (?, ?, 'available', 'New')";
+                        try (PreparedStatement copyStmt = conn.prepareStatement(copySql)) {
+                            for (int i = 0; i < this.totalCopies; i++) {
+                                copyStmt.setInt(1, bookId);
+                                String barcode = this.isbn + String.format("%03d", i + 1);
+                                copyStmt.setString(2, barcode);
+                                copyStmt.addBatch();
+                            }
+                            copyStmt.executeBatch();
+                        }
+
+                        conn.commit();
+                        return true;
+                    }
+                }
+            }
+
+            conn.rollback();
+            return false;
+
         } catch (SQLException e) {
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.out.println("Error rolling back transaction: " + ex.getMessage());
+            }
+            System.out.println("Error adding book to database: " + e.getMessage());
+            return false;
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                System.out.println("Error closing connection: " + e.getMessage());
+            }
+        }
+    }
+
+    // Borrow a book
+    public boolean borrowBook(String username) {
+        String borrowSql = """
+            INSERT INTO loan (copy_id, user_id, loan_date, due_date, status)
+            SELECT c.copy_id, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed'
+            FROM copies c
+            JOIN users u ON u.username = ?
+            WHERE c.book_id = ? AND c.status = 'available'
+            LIMIT 1
+        """;
+
+        String updateCopySql = """
+            UPDATE copies 
+            SET status = 'borrowed'
+            WHERE copy_id = (
+                SELECT copy_id 
+                FROM loan 
+                WHERE status = 'borrowed' 
+                ORDER BY loan_date DESC 
+                LIMIT 1
+            )
+        """;
+
+        DatabaseConnection dbConnection = new DatabaseConnection();
+        Connection conn = null;
+        try {
+            conn = dbConnection.getConnection();
+            conn.setAutoCommit(false);
+
+            // Insert loan record
+            try (PreparedStatement stmt = conn.prepareStatement(borrowSql)) {
+                stmt.setString(1, username);
+                stmt.setInt(2, this.id);
+
+                int rowsAffected = stmt.executeUpdate();
+                if (rowsAffected > 0) {
+                    // Update copy status
+                    try (PreparedStatement updateStmt = conn.prepareStatement(updateCopySql)) {
+                        updateStmt.executeUpdate();
+                    }
+                    conn.commit();
+                    return true;
+                }
+            }
+
+            conn.rollback();
+            return false;
+        } catch (SQLException e) {
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.out.println("Error rolling back transaction: " + ex.getMessage());
+            }
             System.out.println("Error borrowing book: " + e.getMessage());
             return false;
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                System.out.println("Error closing connection: " + e.getMessage());
+            }
         }
     }
 
-
+    // Return a book
     public boolean returnBook(String username) {
-        // Update the loan table to mark the book as returned
-        String returnLoanSql = "UPDATE loan SET status = 'returned', return_date = CURDATE() " +
-                "WHERE user_id = (SELECT id FROM users WHERE username = ?) " +
-                "AND status = 'borrowed' AND return_date IS NULL LIMIT 1";
+        String returnLoanSql = """
+            UPDATE loan 
+            SET status = 'returned', return_date = CURDATE()
+            WHERE user_id = (SELECT id FROM users WHERE username = ?)
+            AND copy_id IN (SELECT copy_id FROM copies WHERE book_id = ?)
+            AND status = 'borrowed' 
+            AND return_date IS NULL
+        """;
 
-        // Update the copies table to mark the copy as available again
-        String returnCopySql = "UPDATE copies SET status = 'available' " +
-                "WHERE book_id = ? AND status = 'borrowed' LIMIT 1";
+        String returnCopySql = """
+            UPDATE copies 
+            SET status = 'available'
+            WHERE book_id = ? 
+            AND copy_id IN (
+                SELECT copy_id 
+                FROM loan 
+                WHERE status = 'returned'
+                AND return_date = CURDATE()
+            )
+        """;
 
         DatabaseConnection dbConnection = new DatabaseConnection();
+        Connection conn = null;
+        try {
+            conn = dbConnection.getConnection();
+            conn.setAutoCommit(false);
 
-        try (Connection conn = dbConnection.getConnection()) {
-            // Update the loan table first
             try (PreparedStatement stmt1 = conn.prepareStatement(returnLoanSql)) {
                 stmt1.setString(1, username);
+                stmt1.setInt(2, this.id);
                 int rowsAffectedLoan = stmt1.executeUpdate();
 
-                if (rowsAffectedLoan == 0) {
-                    // If no rows were updated, no borrowed book found for this user
-                    return false;
+                if (rowsAffectedLoan > 0) {
+                    try (PreparedStatement stmt2 = conn.prepareStatement(returnCopySql)) {
+                        stmt2.setInt(1, this.id);
+                        stmt2.executeUpdate();
+                        conn.commit();
+                        return true;
+                    }
                 }
             }
 
-            // Then update the copies table
-            try (PreparedStatement stmt2 = conn.prepareStatement(returnCopySql)) {
-                stmt2.setInt(1, this.id); // Use book_id here
-                int rowsAffectedCopy = stmt2.executeUpdate();
-
-                if (rowsAffectedCopy == 0) {
-                    // If no rows were updated, something went wrong
-                    return false;
-                }
-            }
-
-            // If both updates were successful, return true
-            return true;
-
+            conn.rollback();
+            return false;
         } catch (SQLException e) {
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.out.println("Error rolling back transaction: " + ex.getMessage());
+            }
             System.out.println("Error returning book: " + e.getMessage());
             return false;
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                System.out.println("Error closing connection: " + e.getMessage());
+            }
         }
     }
 
-
-
-
+    // View all borrowed books for a user
     public static List<Book> viewBorrowedBooks(String username) {
         List<Book> borrowedBooks = new ArrayList<>();
-        String sql = "SELECT b.book_id, b.title, b.author, b.isbn, b.category_id, b.total_copies, " +
-                "l.loan_date, l.due_date " +
-                "FROM books b " +
-                "JOIN copies c ON b.book_id = c.book_id " +
-                "JOIN loan l ON c.copy_id = l.copy_id " +
-                "WHERE l.user_id = (SELECT id FROM users WHERE username = ?) " +
-                "AND l.status = 'borrowed'";
+        String sql = """
+            SELECT b.book_id, b.title, b.author, b.isbn, b.category_id, b.total_copies,
+                   l.loan_date, l.due_date
+            FROM books b
+            JOIN copies c ON b.book_id = c.book_id
+            JOIN loan l ON c.copy_id = l.copy_id
+            WHERE l.user_id = (SELECT id FROM users WHERE username = ?)
+            AND l.status = 'borrowed'
+        """;
 
         DatabaseConnection dbConnection = new DatabaseConnection();
-
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, username);
@@ -208,11 +310,12 @@ public class Book {
         return borrowedBooks;
     }
 
+    // View all books in the library
     public static List<Book> viewAllBooks() {
         List<Book> books = new ArrayList<>();
         String sql = "SELECT book_id, title, author, isbn, category_id, total_copies FROM books";
-        DatabaseConnection dbConnection = new DatabaseConnection();
 
+        DatabaseConnection dbConnection = new DatabaseConnection();
         try (Connection conn = dbConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -228,49 +331,22 @@ public class Book {
                 book.setId(rs.getInt("book_id"));
                 books.add(book);
             }
-
         } catch (SQLException e) {
             System.out.println("Error retrieving books from the database: " + e.getMessage());
         }
         return books;
     }
 
-    // Method to add a new book to the database
-    public boolean addBookToDatabase() {
-        String sql = "INSERT INTO books (title, author, isbn, category_id, total_copies) VALUES (?, ?, ?, ?, ?)";
-        DatabaseConnection dbConnection = new DatabaseConnection();
-
-        try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, this.title);
-            stmt.setString(2, this.author);
-            stmt.setString(3, this.isbn);
-            stmt.setInt(4, this.categoryId);
-            stmt.setInt(5, this.totalCopies);
-
-            int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0;
-
-        } catch (SQLException e) {
-            System.out.println("Error adding book to database: " + e.getMessage());
-            return false;
-        }
-    }
-
-    // Method to delete a book from the database by its ID
+    // Delete a book
     public boolean deleteBook() {
-        String sql = "DELETE FROM books WHERE book_id = ?";
+        String deleteBookSql = "DELETE FROM books WHERE book_id = ?";
         DatabaseConnection dbConnection = new DatabaseConnection();
 
         try (Connection conn = dbConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+             PreparedStatement stmt = conn.prepareStatement(deleteBookSql)) {
             stmt.setInt(1, this.id);
-
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
-
         } catch (SQLException e) {
             System.out.println("Error deleting book from database: " + e.getMessage());
             return false;

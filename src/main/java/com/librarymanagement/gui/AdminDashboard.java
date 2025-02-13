@@ -266,14 +266,8 @@ public class AdminDashboard {
     }
 
     private VBox createSettingsSection() {
-        VBox section = new VBox(20);
-        section.setPadding(new Insets(10));
-
-        Label placeholder = new Label("Settings Section - Coming Soon");
-        placeholder.setStyle("-fx-font-size: 20px;");
-
-        section.getChildren().add(placeholder);
-        return section;
+        SettingsSection settingsSection = new SettingsSection();
+        return settingsSection.getSettingsContainer();
     }
 
     private void handleAddBook() {
