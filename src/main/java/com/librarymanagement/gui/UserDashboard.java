@@ -13,6 +13,8 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 
 import java.util.List;
 
@@ -189,35 +191,6 @@ public class UserDashboard {
         return section;
     }
 
-    private VBox createBorrowedBooksSection(Stage primaryStage) {  // Added primaryStage parameter
-        VBox section = new VBox(10);
-        section.setPadding(new Insets(10));
-
-        borrowedBooksTable = new TableView<>();
-        borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
-        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
-
-        TableColumn<Book, String> authorCol = new TableColumn<>("Author");
-        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
-
-        TableColumn<Book, String> isbnCol = new TableColumn<>("ISBN");
-        isbnCol.setCellValueFactory(new PropertyValueFactory<>("isbn"));
-
-        TableColumn<Book, String> dueDateCol = new TableColumn<>("Due Date");
-        dueDateCol.setCellValueFactory(new PropertyValueFactory<>("dueDate"));
-
-        borrowedBooksTable.getColumns().addAll(titleCol, authorCol, isbnCol, dueDateCol);
-
-        // Add this line after creating the borrowedBooksTable
-        setupBookDetailsHandler(borrowedBooksTable, primaryStage);
-
-        refreshBorrowedBooksTable();
-
-        section.getChildren().addAll(borrowedBooksTable);
-        return section;
-    }
 
     private void setupBookDetailsHandler(TableView<Book> table, Stage primaryStage) {
         table.setOnMouseClicked(event -> {
@@ -264,5 +237,69 @@ public class UserDashboard {
     private void refreshBorrowedBooksTable() {
         List<Book> borrowedBooks = Book.viewBorrowedBooks(currentUser.getUsername());
         borrowedBooksTable.setItems(FXCollections.observableArrayList(borrowedBooks));
+    }
+    // First method: createBorrowedBooksSection
+    private VBox createBorrowedBooksSection(Stage primaryStage) {
+        VBox section = new VBox(10);
+        section.setPadding(new Insets(10));
+
+        borrowedBooksTable = new TableView<>();
+        borrowedBooksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Book, String> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+        TableColumn<Book, String> isbnCol = new TableColumn<>("ISBN");
+        isbnCol.setCellValueFactory(new PropertyValueFactory<>("isbn"));
+
+        TableColumn<Book, String> dueDateCol = new TableColumn<>("Due Date");
+        dueDateCol.setCellValueFactory(new PropertyValueFactory<>("dueDate"));
+
+        borrowedBooksTable.getColumns().addAll(titleCol, authorCol, isbnCol, dueDateCol);
+
+        // Add this line after creating the borrowedBooksTable
+        setupBookDetailsHandler(borrowedBooksTable, primaryStage);
+
+        // Create Return Book button
+        Button returnButton = new Button("Return Selected Book");
+        returnButton.getStyleClass().add("return-button");
+        returnButton.setOnAction(e -> handleReturnBook());
+
+        refreshBorrowedBooksTable();
+
+        section.getChildren().addAll(borrowedBooksTable, returnButton);
+        return section;
+    } // This closing brace was missing
+
+    // Second method: handleReturnBook (separate method)
+    private void handleReturnBook() {
+        Book selectedBook = borrowedBooksTable.getSelectionModel().getSelectedItem();
+        if (selectedBook != null) {
+            // Confirm with the user
+            Alert confirmDialog = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmDialog.setTitle("Return Book");
+            confirmDialog.setHeaderText("Return " + selectedBook.getTitle());
+            confirmDialog.setContentText("Are you sure you want to return this book?");
+
+            confirmDialog.showAndWait().ifPresent(response -> {
+                if (response == ButtonType.OK) {
+                    if (selectedBook.returnBook(currentUser.getUsername())) {
+                        refreshBookTable();
+                        refreshBorrowedBooksTable();
+                        statusLabel.setText("Book returned successfully!");
+                        statusLabel.setStyle("-fx-text-fill: green;");
+                    } else {
+                        statusLabel.setText("Failed to return book.");
+                        statusLabel.setStyle("-fx-text-fill: red;");
+                    }
+                }
+            });
+        } else {
+            statusLabel.setText("Please select a book to return.");
+            statusLabel.setStyle("-fx-text-fill: red;");
+        }
     }
 }
