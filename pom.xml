@@ -34,6 +34,24 @@
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+
+        <!-- Add these to the <dependencies> section of your pom.xml file -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.28</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox-tools</artifactId>
+            <version>2.0.28</version>
+        </dependency>
+        <!-- For JavaFX image conversion if you're using Java 11+ -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-swing</artifactId>
+            <version>17.0.2</version> <!-- Use the version that matches your JavaFX version -->
+        </dependency>
     </dependencies>
 
     <build>

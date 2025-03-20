@@ -3,6 +3,7 @@ package com.lms;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File; // Added missing import for File class
 
 public class Book {
     private int id;
@@ -13,6 +14,7 @@ public class Book {
     private int totalCopies;
     private Date loanDate;
     private Date dueDate;
+    private String pdfFilePath;
 
     // Constructor
     public Book(String title, String author, String isbn, int categoryId, int totalCopies) {
@@ -39,6 +41,8 @@ public class Book {
     public void setLoanDate(Date loanDate) { this.loanDate = loanDate; }
     public Date getDueDate() { return dueDate; }
     public void setDueDate(Date dueDate) { this.dueDate = dueDate; }
+    public String getPdfFilePath() { return pdfFilePath; }
+    public void setPdfFilePath(String pdfFilePath) { this.pdfFilePath = pdfFilePath; }
 
     // Get available copies count
     public int getAvailableCopies() {
@@ -81,7 +85,7 @@ public class Book {
             conn.setAutoCommit(false);  // Start transaction
 
             // First insert the book
-            String bookSql = "INSERT INTO books (title, author, isbn, category_id, total_copies) VALUES (?, ?, ?, ?, ?)";
+            String bookSql = "INSERT INTO books (title, author, isbn, category_id, total_copies, pdf_file_path) VALUES (?, ?, ?, ?, ?, ?)";
 
             try (PreparedStatement stmt = conn.prepareStatement(bookSql, Statement.RETURN_GENERATED_KEYS)) {
                 stmt.setString(1, this.title);
@@ -89,6 +93,7 @@ public class Book {
                 stmt.setString(3, this.isbn);
                 stmt.setInt(4, this.categoryId);
                 stmt.setInt(5, this.totalCopies);
+                stmt.setString(6, this.pdfFilePath); // Added PDF path to the insert
 
                 int rowsAffected = stmt.executeUpdate();
 
@@ -97,6 +102,7 @@ public class Book {
                     ResultSet rs = stmt.getGeneratedKeys();
                     if (rs.next()) {
                         int bookId = rs.getInt(1);
+                        this.id = bookId; // Set the ID of the current object
 
                         // Insert individual copies with barcode and condition
                         String copySql = "INSERT INTO copies (book_id, barcode, status, `condition`) VALUES (?, ?, 'available', 'New')";
@@ -277,7 +283,7 @@ public class Book {
         List<Book> borrowedBooks = new ArrayList<>();
         String sql = """
             SELECT b.book_id, b.title, b.author, b.isbn, b.category_id, b.total_copies,
-                   l.loan_date, l.due_date
+                   l.loan_date, l.due_date, b.pdf_file_path
             FROM books b
             JOIN copies c ON b.book_id = c.book_id
             JOIN loan l ON c.copy_id = l.copy_id
@@ -302,6 +308,7 @@ public class Book {
                 book.setId(rs.getInt("book_id"));
                 book.setLoanDate(rs.getDate("loan_date"));
                 book.setDueDate(rs.getDate("due_date"));
+                book.setPdfFilePath(rs.getString("pdf_file_path"));
                 borrowedBooks.add(book);
             }
         } catch (SQLException e) {
@@ -313,7 +320,7 @@ public class Book {
     // View all books in the library
     public static List<Book> viewAllBooks() {
         List<Book> books = new ArrayList<>();
-        String sql = "SELECT book_id, title, author, isbn, category_id, total_copies FROM books";
+        String sql = "SELECT book_id, title, author, isbn, category_id, total_copies, pdf_file_path FROM books";
 
         DatabaseConnection dbConnection = new DatabaseConnection();
         try (Connection conn = dbConnection.getConnection();
@@ -329,6 +336,7 @@ public class Book {
                         rs.getInt("total_copies")
                 );
                 book.setId(rs.getInt("book_id"));
+                book.setPdfFilePath(rs.getString("pdf_file_path"));
                 books.add(book);
             }
         } catch (SQLException e) {
@@ -351,5 +359,85 @@ public class Book {
             System.out.println("Error deleting book from database: " + e.getMessage());
             return false;
         }
+    }
+
+    // Method to save PDF path to database
+    public boolean savePDFPath() {
+        String sql = "UPDATE books SET pdf_file_path = ? WHERE book_id = ?";
+
+        DatabaseConnection dbConnection = new DatabaseConnection();
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, this.pdfFilePath);
+            stmt.setInt(2, this.id);
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            System.out.println("Error saving PDF path: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Method to load PDF path from database
+    public boolean loadPDFPath() {
+        String sql = "SELECT pdf_file_path FROM books WHERE book_id = ?";
+
+        DatabaseConnection dbConnection = new DatabaseConnection();
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, this.id);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                this.pdfFilePath = rs.getString("pdf_file_path");
+                return this.pdfFilePath != null && !this.pdfFilePath.isEmpty();
+            }
+            return false;
+        } catch (SQLException e) {
+            System.out.println("Error loading PDF path: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Check if PDF file exists
+    public boolean hasPDF() {
+        if (pdfFilePath == null || pdfFilePath.isEmpty()) {
+            if (!loadPDFPath()) {
+                return false;
+            }
+        }
+
+        if (pdfFilePath != null && !pdfFilePath.isEmpty()) {
+            File file = new File(pdfFilePath);
+            return file.exists() && file.isFile();
+        }
+        return false;
+    }
+
+    // Static method to get a book with its PDF path
+    public static Book getBookWithPDF(int bookId) {
+        String sql = "SELECT book_id, title, author, isbn, category_id, total_copies, pdf_file_path FROM books WHERE book_id = ?";
+
+        DatabaseConnection dbConnection = new DatabaseConnection();
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, bookId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                Book book = new Book(
+                        rs.getString("title"),
+                        rs.getString("author"),
+                        rs.getString("isbn"),
+                        rs.getInt("category_id"),
+                        rs.getInt("total_copies")
+                );
+                book.setId(rs.getInt("book_id"));
+                book.setPdfFilePath(rs.getString("pdf_file_path"));
+                return book;
+            }
+        } catch (SQLException e) {
+            System.out.println("Error retrieving book with PDF: " + e.getMessage());
+        }
+        return null;
     }
 }

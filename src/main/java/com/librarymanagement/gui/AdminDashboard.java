@@ -13,14 +13,13 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import java.util.List;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.CategoryAxis;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import javafx.stage.FileChooser;
+import javafx.util.StringConverter;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.ListCell;
+import java.io.File;
+
+
 
 public class AdminDashboard {
     private TableView<Book> bookTable;
@@ -118,6 +117,14 @@ public class AdminDashboard {
             contentArea.getChildren().add(createUserManagementSection());
         });
 
+        // Add PDF Management Link
+        Hyperlink pdfManagementLink = new Hyperlink("PDF Management");
+        pdfManagementLink.getStyleClass().add("menu-item");
+        pdfManagementLink.setOnAction(e -> {
+            contentArea.getChildren().clear();
+            contentArea.getChildren().add(createPDFManagementSection());
+        });
+
         Hyperlink reportsLink = new Hyperlink("Reports & Analytics");
         reportsLink.getStyleClass().add("menu-item");
         reportsLink.setOnAction(e -> {
@@ -135,6 +142,7 @@ public class AdminDashboard {
         leftPanel.getChildren().addAll(
                 bookManagementLink,
                 userManagementLink,
+                pdfManagementLink,  // Add this line
                 reportsLink,
                 settingsLink
         );
@@ -487,4 +495,226 @@ public class AdminDashboard {
         passwordField.clear();
         roleComboBox.getSelectionModel().clearSelection();
     }
+
+    // Add this method to your AdminDashboard class
+
+    private VBox createPDFManagementSection() {
+        VBox section = new VBox(20);
+        section.setPadding(new Insets(10));
+        section.getStyleClass().add("section-container");
+
+        Label sectionTitle = new Label("PDF Management");
+        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        // Create table for books with PDFs
+        TableView<Book> pdfBookTable = new TableView<>();
+        pdfBookTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        pdfBookTable.setMinWidth(600);
+        pdfBookTable.setMinHeight(400);
+
+        TableColumn<Book, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Book, String> authorCol = new TableColumn<>("Author");
+        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
+
+        TableColumn<Book, String> isbnCol = new TableColumn<>("ISBN");
+        isbnCol.setCellValueFactory(new PropertyValueFactory<>("isbn"));
+
+        TableColumn<Book, String> pdfPathCol = new TableColumn<>("PDF Path");
+        pdfPathCol.setCellValueFactory(new PropertyValueFactory<>("pdfFilePath"));
+        pdfPathCol.setPrefWidth(250);
+
+        TableColumn<Book, Boolean> hasPdfCol = new TableColumn<>("Has PDF");
+        hasPdfCol.setCellFactory(col -> new TableCell<Book, Boolean>() {
+            @Override
+            protected void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    Book book = getTableView().getItems().get(getIndex());
+                    boolean hasPdf = book.getPdfFilePath() != null && !book.getPdfFilePath().isEmpty();
+                    setText(hasPdf ? "Yes" : "No");
+                    setStyle(hasPdf ? "-fx-text-fill: green;" : "-fx-text-fill: red;");
+                }
+            }
+        });
+
+        pdfBookTable.getColumns().addAll(titleCol, authorCol, isbnCol, pdfPathCol, hasPdfCol);
+
+        // Form for adding/updating PDF paths
+        VBox pdfForm = new VBox(10);
+        pdfForm.setPadding(new Insets(10));
+        pdfForm.setMinWidth(300);
+        pdfForm.getStyleClass().add("form-container");
+
+        Label formTitle = new Label("Add/Update PDF");
+        formTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        ComboBox<Book> bookComboBox = new ComboBox<>();
+        bookComboBox.setPromptText("Select Book");
+        bookComboBox.setPrefWidth(280);
+
+        // Custom cell factory to display book titles in the dropdown
+        bookComboBox.setCellFactory(param -> new ListCell<Book>() {
+            @Override
+            protected void updateItem(Book item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getTitle() + " (" + item.getAuthor() + ")");
+                }
+            }
+        });
+
+        // Also set a converter to display selected item correctly
+        bookComboBox.setConverter(new StringConverter<Book>() {
+            @Override
+            public String toString(Book book) {
+                return book != null ? book.getTitle() + " (" + book.getAuthor() + ")" : "";
+            }
+
+            @Override
+            public Book fromString(String string) {
+                return null; // Not needed for our use case
+            }
+        });
+
+        TextField pdfPathField = new TextField();
+        pdfPathField.setPromptText("Enter PDF file path");
+
+        Button browseButton = new Button("Browse...");
+        browseButton.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select PDF File");
+            fileChooser.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+            File selectedFile = fileChooser.showOpenDialog(null);
+            if (selectedFile != null) {
+                pdfPathField.setText(selectedFile.getAbsolutePath());
+            }
+        });
+
+        Button saveButton = new Button("Save PDF Path");
+        saveButton.getStyleClass().add("action-button");
+
+        saveButton.setOnAction(e -> {
+            Book selectedBook = bookComboBox.getValue();
+            String pdfPath = pdfPathField.getText().trim();
+
+            if (selectedBook == null) {
+                statusLabel.setText("Please select a book");
+                statusLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+
+            if (pdfPath.isEmpty()) {
+                statusLabel.setText("Please enter a PDF path or browse for a file");
+                statusLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+
+            // Check if file exists
+            File pdfFile = new File(pdfPath);
+            if (!pdfFile.exists() || !pdfFile.isFile()) {
+                statusLabel.setText("The selected PDF file does not exist");
+                statusLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+
+            // Save PDF path
+            selectedBook.setPdfFilePath(pdfPath);
+            if (selectedBook.savePDFPath()) {
+                statusLabel.setText("PDF path saved successfully");
+                statusLabel.setStyle("-fx-text-fill: green;");
+                refreshPDFBookTable(pdfBookTable);
+                pdfPathField.clear();
+                bookComboBox.getSelectionModel().clearSelection();
+            } else {
+                statusLabel.setText("Failed to save PDF path");
+                statusLabel.setStyle("-fx-text-fill: red;");
+            }
+        });
+
+        Button clearButton = new Button("Clear PDF Path");
+        clearButton.getStyleClass().add("secondary-button");
+
+        clearButton.setOnAction(e -> {
+            Book selectedBook = bookComboBox.getValue();
+
+            if (selectedBook == null) {
+                statusLabel.setText("Please select a book");
+                statusLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+
+            // Clear PDF path
+            selectedBook.setPdfFilePath("");
+            if (selectedBook.savePDFPath()) {
+                statusLabel.setText("PDF path cleared successfully");
+                statusLabel.setStyle("-fx-text-fill: green;");
+                refreshPDFBookTable(pdfBookTable);
+                pdfPathField.clear();
+            } else {
+                statusLabel.setText("Failed to clear PDF path");
+                statusLabel.setStyle("-fx-text-fill: red;");
+            }
+        });
+
+        Button refreshButton = new Button("Refresh Table");
+        refreshButton.setOnAction(e -> refreshPDFBookTable(pdfBookTable));
+
+        // Add event listener for table selection
+        pdfBookTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null) {
+                bookComboBox.setValue(newSelection);
+                pdfPathField.setText(newSelection.getPdfFilePath() != null ? newSelection.getPdfFilePath() : "");
+            }
+        });
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.getChildren().addAll(saveButton, clearButton, refreshButton);
+
+        HBox pathBox = new HBox(10);
+        pathBox.getChildren().addAll(pdfPathField, browseButton);
+
+        pdfForm.getChildren().addAll(
+                formTitle,
+                new Label("Select Book:"),
+                bookComboBox,
+                new Label("PDF File Path:"),
+                pathBox,
+                buttonBox
+        );
+
+        // Load data
+        refreshPDFBookTable(pdfBookTable);
+        populateBookComboBox(bookComboBox);
+
+        HBox contentLayout = new HBox(20);
+        contentLayout.getChildren().addAll(pdfForm, pdfBookTable);
+
+        section.getChildren().addAll(sectionTitle, contentLayout);
+
+        return section;
+    }
+
+    // Helper method to refresh the PDF book table
+    private void refreshPDFBookTable(TableView<Book> pdfBookTable) {
+        List<Book> books = Book.viewAllBooks();
+        ObservableList<Book> bookData = FXCollections.observableArrayList(books);
+        pdfBookTable.setItems(bookData);
+    }
+
+    // Helper method to populate the book combo box
+    private void populateBookComboBox(ComboBox<Book> bookComboBox) {
+        List<Book> books = Book.viewAllBooks();
+        ObservableList<Book> bookData = FXCollections.observableArrayList(books);
+        bookComboBox.setItems(bookData);
+    }
+
+
 }
