@@ -145,28 +145,15 @@ public class Book {
         }
     }
 
-    // Borrow a book
     public boolean borrowBook(String username) {
         String borrowSql = """
-            INSERT INTO loan (copy_id, user_id, loan_date, due_date, status)
-            SELECT c.copy_id, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed'
-            FROM copies c
-            JOIN users u ON u.username = ?
-            WHERE c.book_id = ? AND c.status = 'available'
-            LIMIT 1
-        """;
-
-        String updateCopySql = """
-            UPDATE copies 
-            SET status = 'borrowed'
-            WHERE copy_id = (
-                SELECT copy_id 
-                FROM loan 
-                WHERE status = 'borrowed' 
-                ORDER BY loan_date DESC 
-                LIMIT 1
-            )
-        """;
+        INSERT INTO loan (copy_id, user_id, loan_date, due_date, status)
+        SELECT c.copy_id, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed'
+        FROM copies c
+        JOIN users u ON u.username = ?
+        WHERE c.book_id = ? AND c.status = 'available'
+        LIMIT 1
+    """;
 
         DatabaseConnection dbConnection = new DatabaseConnection();
         Connection conn = null;
@@ -174,15 +161,45 @@ public class Book {
             conn = dbConnection.getConnection();
             conn.setAutoCommit(false);
 
-            // Insert loan record
-            try (PreparedStatement stmt = conn.prepareStatement(borrowSql)) {
-                stmt.setString(1, username);
-                stmt.setInt(2, this.id);
+            // First, get a specific copy_id to borrow
+            String getCopyIdSql = """
+            SELECT c.copy_id 
+            FROM copies c
+            WHERE c.book_id = ? AND c.status = 'available'
+            LIMIT 1
+        """;
 
-                int rowsAffected = stmt.executeUpdate();
+            int copyId = -1;
+            try (PreparedStatement getStmt = conn.prepareStatement(getCopyIdSql)) {
+                getStmt.setInt(1, this.id);
+                ResultSet rs = getStmt.executeQuery();
+                if (rs.next()) {
+                    copyId = rs.getInt("copy_id");
+                } else {
+                    // No available copies
+                    conn.rollback();
+                    return false;
+                }
+            }
+
+            // Now insert the loan record for this specific copy
+            String insertLoanSql = """
+            INSERT INTO loan (copy_id, user_id, loan_date, due_date, status)
+            SELECT ?, u.id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'borrowed'
+            FROM users u 
+            WHERE u.username = ?
+        """;
+
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertLoanSql)) {
+                insertStmt.setInt(1, copyId);
+                insertStmt.setString(2, username);
+
+                int rowsAffected = insertStmt.executeUpdate();
                 if (rowsAffected > 0) {
-                    // Update copy status
+                    // Update the specific copy status
+                    String updateCopySql = "UPDATE copies SET status = 'borrowed' WHERE copy_id = ?";
                     try (PreparedStatement updateStmt = conn.prepareStatement(updateCopySql)) {
+                        updateStmt.setInt(1, copyId);
                         updateStmt.executeUpdate();
                     }
                     conn.commit();

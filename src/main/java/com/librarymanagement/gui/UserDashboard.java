@@ -227,11 +227,21 @@ public class UserDashboard {
         }
     }
 
+
     private void refreshBookTable() {
         List<Book> books = Book.viewAllBooks();
         ObservableList<Book> bookData = FXCollections.observableArrayList(books);
         filteredBooks = new FilteredList<>(bookData, p -> true);
         bookTable.setItems(filteredBooks);
+
+        // Preserve current search filter if any
+        if (searchField != null && !searchField.getText().isEmpty()) {
+            String filter = searchField.getText().toLowerCase();
+            filteredBooks.setPredicate(book ->
+                    book.getTitle().toLowerCase().contains(filter) ||
+                            book.getAuthor().toLowerCase().contains(filter)
+            );
+        }
     }
 
     private void refreshBorrowedBooksTable() {
